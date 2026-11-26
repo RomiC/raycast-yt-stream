@@ -1,4 +1,5 @@
 import { UserError } from "./errors";
+import { decodeEntities } from "./text";
 
 const YOUTUBE_ORIGIN = "https://www.youtube.com";
 const USER_AGENT =
@@ -121,9 +122,9 @@ async function fetchChannel(pageUrl: string): Promise<ResolvedChannel> {
   }
 
   return {
-    name: decodeHtmlEntities(title),
+    name: decodeEntities(title),
     channelId,
-    thumbnail: image ? decodeHtmlEntities(image) : null,
+    thumbnail: image ? decodeEntities(image) : null,
   };
 }
 
@@ -183,15 +184,4 @@ function findChannelResult(node: unknown): string | null {
   }
 
   return null;
-}
-
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
 }
