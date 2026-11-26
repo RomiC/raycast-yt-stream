@@ -19,6 +19,7 @@ export type ResolvedChannel = {
   name: string;
   channelId: string;
   thumbnail: string | null;
+  description: string | null;
 };
 
 export async function resolveChannel(input: string): Promise<ResolvedChannel> {
@@ -125,7 +126,27 @@ async function fetchChannel(pageUrl: string): Promise<ResolvedChannel> {
     name: decodeEntities(title),
     channelId,
     thumbnail: image ? decodeEntities(image) : null,
+    description: readDescription(html),
   };
+}
+
+/** ytInitialData holds the full text; the og tag is a truncated fallback. */
+function readDescription(html: string): string | null {
+  const data = html.match(/var ytInitialData = (\{.*?\});<\/script>/s)?.[1];
+  if (data) {
+    try {
+      const metadata = JSON.parse(data) as { metadata?: { channelMetadataRenderer?: { description?: unknown } } };
+      const description = metadata.metadata?.channelMetadataRenderer?.description;
+      if (typeof description === "string" && description.trim()) {
+        return description.trim();
+      }
+    } catch {
+      // Malformed page: fall back to the meta tag below.
+    }
+  }
+
+  const fallback = html.match(/<meta property="og:description" content="([^"]*)"/)?.[1];
+  return fallback ? decodeEntities(fallback).trim() : null;
 }
 
 async function fetchHtml(url: string): Promise<string> {

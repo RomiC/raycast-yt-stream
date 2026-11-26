@@ -15,9 +15,14 @@ export async function getChannel(id: string): Promise<Channel | undefined> {
   return channels.find((channel) => channel.id === id);
 }
 
-export type NewChannel = Pick<Channel, "name" | "channelId"> & Partial<Pick<Channel, "thumbnail">>;
+export type NewChannel = Pick<Channel, "name" | "channelId"> & Partial<Pick<Channel, "thumbnail" | "description">>;
 
 export async function insertChannel(channel: NewChannel): Promise<Channel> {
+  const name = channel.name.trim();
+  if (!name) {
+    throw new UserError("validation", "Enter a channel name.");
+  }
+
   const channels = await readAll();
   if (channels.some((existing) => existing.channelId === channel.channelId)) {
     throw new UserError("validation", "This channel is already in your list.");
@@ -25,9 +30,10 @@ export async function insertChannel(channel: NewChannel): Promise<Channel> {
 
   const created: Channel = {
     id: randomUUID(),
-    name: channel.name,
+    name,
     channelId: channel.channelId,
     thumbnail: channel.thumbnail ?? null,
+    description: channel.description ?? null,
     createdAt: Date.now(),
   };
 
@@ -35,22 +41,20 @@ export async function insertChannel(channel: NewChannel): Promise<Channel> {
   return created;
 }
 
-export type ChannelUpdate = Pick<Channel, "name" | "channelId"> & Partial<Pick<Channel, "thumbnail">>;
-
-export async function updateChannel(id: string, update: ChannelUpdate): Promise<Channel> {
+/** Only the display name is user-editable; the channel identity and avatar come from YouTube. */
+export async function renameChannel(id: string, name: string): Promise<Channel> {
   const channels = await readAll();
   const index = channels.findIndex((channel) => channel.id === id);
   if (index === -1) {
     throw new UserError("unknown", "The channel no longer exists.");
   }
 
-  const updated: Channel = {
-    ...channels[index],
-    name: update.name,
-    channelId: update.channelId,
-    thumbnail: update.thumbnail ?? null,
-  };
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new UserError("validation", "Enter a channel name.");
+  }
 
+  const updated: Channel = { ...channels[index], name: trimmed };
   const next = [...channels];
   next[index] = updated;
   await writeAll(next);
@@ -80,7 +84,8 @@ async function readAll(): Promise<Channel[]> {
     throw new UserError("parse", "Your channel list has an unexpected format and was left untouched.");
   }
 
-  return parsed;
+  // Records written before `description` existed are normalised instead of rejected.
+  return parsed.map((channel) => ({ ...channel, description: channel.description ?? null }));
 }
 
 async function writeAll(channels: Channel[]): Promise<void> {
@@ -97,6 +102,7 @@ function isChannel(value: unknown): value is Channel {
     typeof channel.name === "string" &&
     typeof channel.channelId === "string" &&
     typeof channel.createdAt === "number" &&
-    (channel.thumbnail === null || typeof channel.thumbnail === "string")
+    (channel.thumbnail === null || typeof channel.thumbnail === "string") &&
+    (channel.description === null || channel.description === undefined || typeof channel.description === "string")
   );
 }

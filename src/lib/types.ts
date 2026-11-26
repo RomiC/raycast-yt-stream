@@ -8,6 +8,8 @@ export interface Channel {
   /** YouTube channel ID (`UC…`). */
   channelId: string;
   thumbnail: string | null;
+  /** Channel "About" text, as published by YouTube. */
+  description: string | null;
   createdAt: number;
 }
 
