@@ -3,6 +3,7 @@ import { useCachedPromise, useFrecencySorting } from "@raycast/utils";
 import { useState } from "react";
 import { AddEditChannelForm } from "./components/add-edit-channel-form";
 import { YtDlpInstall } from "./components/ytdlp-install";
+import { getServiceConfig, startStream } from "./lib/api";
 import { listChannels } from "./lib/channels";
 import { toUserMessage } from "./lib/errors";
 import { fetchStreams, isYtDlpReady } from "./lib/ytdlp";
@@ -99,8 +100,30 @@ export default function BrowseStreams() {
   });
 
   const [filter, setFilter] = useState<Filter>(ANY_FILTER);
+  const [isStarting, setIsStarting] = useState(false);
 
   const addChannel = () => push(<AddEditChannelForm />, revalidate);
+
+  async function start(stream: Stream) {
+    const toast = await showToast({ style: Toast.Style.Animated, title: "Starting stream", message: stream.title });
+    let token: string | undefined;
+
+    setIsStarting(true);
+    try {
+      const config = getServiceConfig();
+      token = config.token;
+      await startStream(stream.videoId, config);
+      await visitItem(stream);
+      toast.style = Toast.Style.Success;
+      toast.title = "Stream started";
+    } catch (failure) {
+      toast.style = Toast.Style.Failure;
+      toast.title = "Could not start the stream";
+      toast.message = toUserMessage(failure, token ? [token] : []);
+    } finally {
+      setIsStarting(false);
+    }
+  }
 
   if (error) {
     return (
@@ -153,7 +176,7 @@ export default function BrowseStreams() {
 
   return (
     <Grid
-      isLoading={isLoading}
+      isLoading={isLoading || isStarting}
       columns={3}
       aspectRatio="16/9"
       fit={Grid.Fit.Fill}
@@ -230,6 +253,7 @@ export default function BrowseStreams() {
               accessory={STATE_BADGE[stream.state]}
               actions={
                 <ActionPanel>
+                  <Action title="Start Stream" icon={Icon.PlayFilled} onAction={() => start(stream)} />
                   <Action
                     title="Open in Browser"
                     icon={Icon.Globe}
@@ -237,6 +261,11 @@ export default function BrowseStreams() {
                       visitItem(stream);
                       void open(`https://youtu.be/${stream.videoId}`);
                     }}
+                  />
+                  <Action.CopyToClipboard
+                    title="Copy URL"
+                    content={`https://youtu.be/${stream.videoId}`}
+                    shortcut={Keyboard.Shortcut.Common.Copy}
                   />
                   <Action
                     title="Refresh"
