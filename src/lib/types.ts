@@ -1,5 +1,8 @@
-/** How a stream is presented in the UI. */
-export type StreamState = "live" | "recording" | "video";
+/** How a stream is presented in the UI. String values are stable, so records stay readable. */
+export enum StreamState {
+  Live = "live",
+  Recording = "recording",
+}
 
 /** Channel identifier as returned by the resolver: the ID is the key, the URL is derived. */
 export interface Channel {
@@ -20,8 +23,6 @@ export interface Stream {
   channelName: string;
   thumbnail: string;
   state: StreamState;
-  /** ISO 8601 timestamp from the feed entry. */
-  publishedAt: string;
 }
 
 /** Normalized user preferences for talking to the yt-stream service. */
