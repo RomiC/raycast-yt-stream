@@ -5,15 +5,40 @@
   "description": "Choose and stream your favourite YouTube Live's",
   "icon": "extension-icon.png",
   "author": "RomiC",
-  "platforms": [
-    "Windows",
-    "macOS"
-  ],
-  "categories": [
-    "Media"
-  ],
+  "platforms": ["Windows", "macOS"],
+  "categories": ["Media"],
   "license": "MIT",
-  "commands": [],
+  "preferences": [
+    {
+      "name": "streamApiUrl",
+      "type": "textfield",
+      "required": true,
+      "title": "Stream API URL",
+      "description": "Base URL of the yt-stream service: protocol, host and port only. The /api/stream path is added by the extension.",
+      "placeholder": "https://yt-stream.example.com:8443"
+    },
+    {
+      "name": "apiToken",
+      "type": "password",
+      "required": true,
+      "title": "API Token",
+      "description": "Bearer token used to authenticate against the yt-stream service."
+    }
+  ],
+  "commands": [
+    {
+      "name": "index",
+      "title": "Browse Streams",
+      "description": "Browse streams from your channels and start one on the yt-stream service.",
+      "mode": "view"
+    },
+    {
+      "name": "manage-channels",
+      "title": "Manage Channels",
+      "description": "Add, rename or remove your YouTube channels.",
+      "mode": "view"
+    }
+  ],
   "tools": [],
   "dependencies": {
     "@raycast/api": "^2.14.0",
@@ -32,7 +57,7 @@
     "dev": "ray develop",
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",
-    "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish it to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1",
+    "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish the extension to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish the extension to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1",
     "publish": "npx @raycast/api@latest publish"
   }
 }

@@ -103,7 +103,7 @@ WI-4, WI-5, WI-6 are independent of each other and can be done in parallel once 
 
 - `isYtDlpReady()` / `resolveYtDlp()`: detect a `yt-dlp` on `PATH` (cached) or a previously installed copy under `<supportPath>/bin/`. Fetching never downloads: without a binary it raises a `validation` error that points at the setup screen.
 - `installYtDlp(onProgress)`: user-triggered install of the platform asset from the latest GitHub release into `<supportPath>/bin/`, streamed to disk while hashing, verified against the release `SHA2-256SUMS`, `chmod 755`ed and renamed into place. Failures clean up and raise a `network` error.
-- `fetchStreams(channel)`: runs `yt-dlp --flat-playlist --dump-json --playlist-end 20 <channel>/streams` with a 60 s timeout, then parses the JSONL.
+- `fetchStreams(channel)`: runs `yt-dlp --flat-playlist --dump-json --playlist-end 20 <channel>/streams` with a 60 s timeout, parses the JSONL, and retries the run once before reporting a `network` error.
 - `parseStreams(output, channel)`: maps `{ id, title, live_status }` to `Stream`, treats `is_live` as `Live` and everything else as `Recording`, builds the 16:9 `mqdefault` thumbnail, and keeps live entries first.
 
 **Done when:** a channel with running lives returns them as `Live` with real titles and thumbnails; a channel with only past streams returns them as `Recording`; a second run reuses an existing binary.
@@ -119,6 +119,8 @@ WI-4, WI-5, WI-6 are independent of each other and can be done in parallel once 
 - Rename mode shows the stored Title only; the description is not repeated there.
 - Lookups are non-blocking: `Form.isLoading` renders a loading bar only, so the inputs stay usable while the request runs.
 - The channel avatar is shown as the submit action's icon, since Raycast forms cannot render images. Channel ID and URL are not surfaced in the form.
+- Submitting before the debounced lookup finishes re-resolves and uses the fetched title; an edited title is kept only when it belongs to the channel still selected.
+- A lookup started for older text cannot overwrite newer state or raise a stale error: the effect aborts it through an `AbortController` (threaded into `resolveChannel` and merged with its request timeout), and `AbortError` is treated as an expected cancellation rather than a failure.
 - Resolver and store failures are caught (since `handleSubmit` does not catch), pinned to the field with `setValidationError`, toasted, and `return false` gives Raycast's failure feedback.
 - Success shows `Added <name>` (or `Renamed to <name>`) and pops, so a pushed form returns to its caller.
 
@@ -185,12 +187,15 @@ WI-4, WI-5, WI-6 are independent of each other and can be done in parallel once 
 
 ## WI-12 — Polish & harden
 
-**Files:** mostly `src/index.tsx`, `src/manage-channels.tsx`, `src/lib/*`
+**Files:** `src/index.tsx`, `src/manage-channels.tsx`, `src/lib/*`
 
-- Handle network failures with retry; keep empty/error states consistent.
-- Final pass: `npm run lint`, `npm run build`, Prettier; confirm no token leaks in logs.
+- `fetchStreams` retries a failed yt-dlp run once before surfacing a `network` error.
+- Empty states in Browse Streams offer **Add Channel** and **Manage Channels**, so import/export is reachable from the streaming screen. The yt-dlp setup stays exclusively on Browse Streams — Manage Channels never mentions it.
+- Copy pass for consistent wording across both commands ("Could not load your …", "No … yet").
+- Token audit: `apiToken` is read only by `getServiceConfig`, sent only as an `Authorization` header, never logged, and redacted through `toUserMessage(error, [token])` on the one path that holds it.
+- Final pass: `npm run lint`, `npm run build`, Prettier.
 
-**Done when:** lint and build are clean; the error states look right.
+**Done when:** a transient yt-dlp failure does not immediately surface as a channel error, every empty state leads somewhere useful, and no token can reach a log, toast or error message.
 
 ---
 
@@ -200,7 +205,7 @@ WI-4, WI-5, WI-6 are independent of each other and can be done in parallel once 
 
 - `serializeChannels(): Promise<string>` — pretty-printed JSON array of stored records (DESIGN §6.4).
 - `parseChannels(json: string): Channel[]` — accepts a bare array or `{ "channels": [...] }`, validates every record with `isChannel` (now shared from `channel-io.ts`, which the store imports too), and rejects the whole payload on the first invalid entry (atomic). Records without `description` are normalised to `null`.
-- `mergeChannels(existing, incoming)` — de-duplicates by `channelId`, never overwrites an existing record, and reports `{ merged, imported, skipped }`.
+- `mergeChannels(existing, incoming)` — de-duplicates by `channelId`, assigns a fresh `randomUUID` to each accepted record (so a copied file cannot collide with an existing `id`), never overwrites an existing record, and reports `{ merged, imported, skipped }`.
 - `importChannels(records)` in `channels.ts` performs the merge as a single read-modify-write, and writes only when something was imported.
 
 **Done when:** code review; `serialize → parse → merge` round-trips losslessly and the atomic rejection path is covered.
