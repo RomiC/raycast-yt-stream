@@ -1,5 +1,6 @@
 import { LocalStorage } from "@raycast/api";
 import { randomUUID } from "node:crypto";
+import { isChannel, mergeChannels } from "./channel-io";
 import { UserError } from "./errors";
 import type { Channel } from "./types";
 
@@ -92,17 +93,12 @@ async function writeAll(channels: Channel[]): Promise<void> {
   await LocalStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
 }
 
-function isChannel(value: unknown): value is Channel {
-  if (typeof value !== "object" || value === null) {
-    return false;
+/** Bulk merge as a single read-modify-write, so N records do not cause N writes. */
+export async function importChannels(records: Channel[]): Promise<{ imported: number; skipped: number }> {
+  const channels = await readAll();
+  const { merged, imported, skipped } = mergeChannels(channels, records);
+  if (imported > 0) {
+    await writeAll(merged);
   }
-  const channel = value as Record<string, unknown>;
-  return (
-    typeof channel.id === "string" &&
-    typeof channel.name === "string" &&
-    typeof channel.channelId === "string" &&
-    typeof channel.createdAt === "number" &&
-    (channel.thumbnail === null || typeof channel.thumbnail === "string") &&
-    (channel.description === null || channel.description === undefined || typeof channel.description === "string")
-  );
+  return { imported, skipped };
 }

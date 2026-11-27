@@ -1,7 +1,20 @@
-import { Action, ActionPanel, Alert, Icon, List, Toast, confirmAlert, showToast, useNavigation } from "@raycast/api";
+import {
+  Action,
+  ActionPanel,
+  Alert,
+  Icon,
+  List,
+  Toast,
+  confirmAlert,
+  showInFinder,
+  showToast,
+  useNavigation,
+} from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { AddEditChannelForm } from "./components/add-edit-channel-form";
+import { ImportChannelsForm } from "./components/import-channels-form";
 import { channelPageUrl } from "./lib/channel-resolver";
+import { exportChannelsToFile } from "./lib/channel-io";
 import { deleteChannel, listChannels } from "./lib/channels";
 import { toUserMessage } from "./lib/errors";
 import type { Channel } from "./lib/types";
@@ -11,6 +24,30 @@ export default function ManageChannels() {
   const { data: channels, isLoading, error, revalidate } = usePromise(listChannels);
 
   const openForm = (channel?: Channel) => push(<AddEditChannelForm channel={channel} />, revalidate);
+
+  async function exportChannels() {
+    try {
+      const channels = await listChannels();
+      if (channels.length === 0) {
+        await showToast({ style: Toast.Style.Failure, title: "Nothing to export", message: "Add a channel first." });
+        return;
+      }
+
+      const file = await exportChannelsToFile(channels);
+      await showToast({
+        style: Toast.Style.Success,
+        title: `Exported ${channels.length} channel${channels.length === 1 ? "" : "s"}`,
+        message: file,
+      });
+      await showInFinder(file);
+    } catch (failure) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Could not export channels",
+        message: toUserMessage(failure),
+      });
+    }
+  }
 
   if (error) {
     return (
@@ -34,10 +71,15 @@ export default function ManageChannels() {
       <List.EmptyView
         icon={Icon.Person}
         title="No channels yet"
-        description="Add your first channel to start streaming."
+        description="Add your first channel, or import an existing list."
         actions={
           <ActionPanel>
             <Action title="Add Channel" icon={Icon.Plus} onAction={() => openForm()} />
+            <Action
+              title="Import Channels"
+              icon={Icon.Download}
+              onAction={() => push(<ImportChannelsForm onImported={revalidate} />)}
+            />
           </ActionPanel>
         }
       />
@@ -50,6 +92,12 @@ export default function ManageChannels() {
             <ActionPanel>
               <Action title="Edit Channel" icon={Icon.Pencil} onAction={() => openForm(channel)} />
               <Action title="Add Channel" icon={Icon.Plus} onAction={() => openForm()} />
+              <Action
+                title="Import Channels"
+                icon={Icon.Download}
+                onAction={() => push(<ImportChannelsForm onImported={revalidate} />)}
+              />
+              <Action title="Export Channels" icon={Icon.Upload} onAction={exportChannels} />
               <Action.OpenInBrowser title="Open Channel in Browser" url={channelPageUrl(channel.channelId)} />
               <Action
                 title="Remove Channel"
