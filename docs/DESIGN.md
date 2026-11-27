@@ -93,7 +93,7 @@ Record shape:
 ### 5.1 Pipeline
 
 1. **Channel page URL** is derived from the stored `channelId` (`channelPageUrl`), then `/streams` is appended.
-2. **Run yt-dlp** with `--flat-playlist --dump-json --playlist-end 20`, one process per channel, at most 20 entries.
+2. **Run yt-dlp** with `--flat-playlist --dump-json --playlist-end 20`, one process per channel, at most 20 entries. A failed run is retried once before the channel is reported as failed.
 3. **Parse the JSONL output**: each line yields `{ id, title, live_status }`. Lines that fail to parse or lack an id/title are skipped.
 
 ### 5.2 Cover art
@@ -161,7 +161,7 @@ A single screen, no channel-selection step:
   3. **By State** — `Live` and `Recordings` across all channels; a state with no streams is not offered.
 - The grouping follows the filter: with no channel selected the grid groups by channel; with a specific channel selected it groups by state, so the other dimension is always represented. Groups keep first-appearance order, preserving the frecency/live ordering.
 - The built-in search bar filters by title; each item also carries its channel name and state as `keywords`.
-- A filter that matches nothing shows a dedicated empty state with **Show All Streams**.
+- Empty states offer the way out: **Add Channel** and **Manage Channels** (which is where import lives), plus **Show All Streams** when only the filter is empty.
 - Primary action **Start Stream** runs on Enter, with no confirmation. The window stays open so another stream can be started.
 - The action shows one toast that turns from *Starting stream* into *Stream started* or *Could not start the stream*; the command also shows its progress bar while the request runs.
 - Secondary actions: **Open in Browser** (`https://youtu.be/<id>`) and **Copy URL**, bound to `Keyboard.Shortcut.Common.Copy` — ⌘⇧C on macOS, Ctrl+Shift+C on Windows, which is why it does not clash with copying text from the search bar. Opening counts as a visit for frecency, so do starting a stream.

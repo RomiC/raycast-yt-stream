@@ -1,4 +1,16 @@
-import { Action, ActionPanel, Grid, Icon, Keyboard, Toast, open, showToast, useNavigation } from "@raycast/api";
+import {
+  Action,
+  ActionPanel,
+  Grid,
+  Icon,
+  Keyboard,
+  LaunchType,
+  Toast,
+  launchCommand,
+  open,
+  showToast,
+  useNavigation,
+} from "@raycast/api";
 import { useCachedPromise, useFrecencySorting } from "@raycast/utils";
 import { useState } from "react";
 import { AddEditChannelForm } from "./components/add-edit-channel-form";
@@ -103,6 +115,7 @@ export default function BrowseStreams() {
   const [isStarting, setIsStarting] = useState(false);
 
   const addChannel = () => push(<AddEditChannelForm />, revalidate);
+  const manageChannels = () => launchCommand({ name: "manage-channels", type: LaunchType.UserInitiated });
 
   async function start(stream: Stream) {
     const toast = await showToast({ style: Toast.Style.Animated, title: "Starting stream", message: stream.title });
@@ -152,10 +165,11 @@ export default function BrowseStreams() {
         <Grid.EmptyView
           icon={Icon.Video}
           title="No channels yet"
-          description="Add a channel to see its streams here."
+          description="Add a channel to see its streams here, or manage your list."
           actions={
             <ActionPanel>
               <Action title="Add Channel" icon={Icon.Plus} onAction={addChannel} />
+              <Action title="Manage Channels" icon={Icon.Person} onAction={manageChannels} />
             </ActionPanel>
           }
         />
@@ -225,6 +239,7 @@ export default function BrowseStreams() {
             <ActionPanel>
               <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={revalidate} />
               <Action title="Add Channel" icon={Icon.Plus} onAction={addChannel} />
+              <Action title="Manage Channels" icon={Icon.Person} onAction={manageChannels} />
             </ActionPanel>
           }
         />
@@ -274,6 +289,7 @@ export default function BrowseStreams() {
                     shortcut={Keyboard.Shortcut.Common.Refresh}
                   />
                   <Action title="Add Channel" icon={Icon.Plus} onAction={addChannel} />
+                  <Action title="Manage Channels" icon={Icon.Person} onAction={manageChannels} />
                 </ActionPanel>
               }
             />

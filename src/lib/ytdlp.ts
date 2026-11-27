@@ -137,22 +137,23 @@ async function download(
   return hash.digest("hex");
 }
 
-/** Streams for one channel, as reported by yt-dlp's flat playlist mode. */
+/** Streams for one channel, as reported by yt-dlp's flat playlist mode. Retried once on failure. */
 export async function fetchStreams(channel: Channel): Promise<Stream[]> {
   const binary = await resolveYtDlp();
   const url = `${channelPageUrl(channel.channelId)}/streams`;
+  const args = ["--flat-playlist", "--dump-json", "--playlist-end", String(PLAYLIST_LIMIT), url];
 
-  let stdout: string;
-  try {
-    ({ stdout } = await run(binary, ["--flat-playlist", "--dump-json", "--playlist-end", String(PLAYLIST_LIMIT), url], {
-      maxBuffer: MAX_BUFFER,
-      timeout: EXEC_TIMEOUT_MS,
-    }));
-  } catch (error) {
-    throw new UserError("network", `Could not load streams for ${channel.name}.`, { cause: error });
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const { stdout } = await run(binary, args, { maxBuffer: MAX_BUFFER, timeout: EXEC_TIMEOUT_MS });
+      return parseStreams(stdout, channel);
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  return parseStreams(stdout, channel);
+  throw new UserError("network", `Could not load streams for ${channel.name}.`, { cause: lastError });
 }
 
 export function parseStreams(output: string, channel: Channel): Stream[] {

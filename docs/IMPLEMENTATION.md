@@ -103,7 +103,7 @@ WI-4, WI-5, WI-6 are independent of each other and can be done in parallel once 
 
 - `isYtDlpReady()` / `resolveYtDlp()`: detect a `yt-dlp` on `PATH` (cached) or a previously installed copy under `<supportPath>/bin/`. Fetching never downloads: without a binary it raises a `validation` error that points at the setup screen.
 - `installYtDlp(onProgress)`: user-triggered install of the platform asset from the latest GitHub release into `<supportPath>/bin/`, streamed to disk while hashing, verified against the release `SHA2-256SUMS`, `chmod 755`ed and renamed into place. Failures clean up and raise a `network` error.
-- `fetchStreams(channel)`: runs `yt-dlp --flat-playlist --dump-json --playlist-end 20 <channel>/streams` with a 60 s timeout, then parses the JSONL.
+- `fetchStreams(channel)`: runs `yt-dlp --flat-playlist --dump-json --playlist-end 20 <channel>/streams` with a 60 s timeout, parses the JSONL, and retries the run once before reporting a `network` error.
 - `parseStreams(output, channel)`: maps `{ id, title, live_status }` to `Stream`, treats `is_live` as `Live` and everything else as `Recording`, builds the 16:9 `mqdefault` thumbnail, and keeps live entries first.
 
 **Done when:** a channel with running lives returns them as `Live` with real titles and thumbnails; a channel with only past streams returns them as `Recording`; a second run reuses an existing binary.
@@ -185,12 +185,15 @@ WI-4, WI-5, WI-6 are independent of each other and can be done in parallel once 
 
 ## WI-12 — Polish & harden
 
-**Files:** mostly `src/index.tsx`, `src/manage-channels.tsx`, `src/lib/*`
+**Files:** `src/index.tsx`, `src/manage-channels.tsx`, `src/lib/*`
 
-- Handle network failures with retry; keep empty/error states consistent.
-- Final pass: `npm run lint`, `npm run build`, Prettier; confirm no token leaks in logs.
+- `fetchStreams` retries a failed yt-dlp run once before surfacing a `network` error.
+- Empty states in Browse Streams offer **Add Channel** and **Manage Channels**, so import/export is reachable from the streaming screen. The yt-dlp setup stays exclusively on Browse Streams — Manage Channels never mentions it.
+- Copy pass for consistent wording across both commands ("Could not load your …", "No … yet").
+- Token audit: `apiToken` is read only by `getServiceConfig`, sent only as an `Authorization` header, never logged, and redacted through `toUserMessage(error, [token])` on the one path that holds it.
+- Final pass: `npm run lint`, `npm run build`, Prettier.
 
-**Done when:** lint and build are clean; the error states look right.
+**Done when:** a transient yt-dlp failure does not immediately surface as a channel error, every empty state leads somewhere useful, and no token can reach a log, toast or error message.
 
 ---
 
