@@ -22,7 +22,8 @@ export type ResolvedChannel = {
   description: string | null;
 };
 
-export async function resolveChannel(input: string): Promise<ResolvedChannel> {
+export async function resolveChannel(input: string, options?: { signal?: AbortSignal }): Promise<ResolvedChannel> {
+  const { signal } = options ?? {};
   const trimmed = input.trim();
   if (!trimmed) {
     throw new UserError("validation", "Enter a channel URL, an @handle or a channel name.");
@@ -30,7 +31,7 @@ export async function resolveChannel(input: string): Promise<ResolvedChannel> {
 
   const direct = toChannelUrl(trimmed);
   if (direct) {
-    return fetchChannel(direct);
+    return fetchChannel(direct, signal);
   }
 
   if (/^https?:\/\//i.test(trimmed) || /youtube\.com/i.test(trimmed)) {
@@ -40,7 +41,7 @@ export async function resolveChannel(input: string): Promise<ResolvedChannel> {
     );
   }
 
-  return fetchChannel(await searchChannel(trimmed));
+  return fetchChannel(await searchChannel(trimmed, signal), signal);
 }
 
 /** Maps a pasted channel URL, `@handle` or `UC…` ID to a channel page URL; other links yield null. */
@@ -83,7 +84,7 @@ export function toChannelUrl(input: string): string | null {
   }
 }
 
-async function searchChannel(name: string): Promise<string> {
+async function searchChannel(name: string, signal: AbortSignal | undefined): Promise<string> {
   let sawResultsPage = false;
 
   for (let attempt = 0; attempt < SEARCH_ATTEMPTS; attempt += 1) {
@@ -91,7 +92,7 @@ async function searchChannel(name: string): Promise<string> {
     url.searchParams.set("search_query", name);
     url.searchParams.set("sp", CHANNEL_SEARCH_FILTER);
 
-    const html = await fetchHtml(url.toString());
+    const html = await fetchHtml(url.toString(), signal);
     const data = html.match(/var ytInitialData = (\{.*?\});<\/script>/s)?.[1];
     if (!data) {
       continue;
@@ -109,8 +110,8 @@ async function searchChannel(name: string): Promise<string> {
     : new UserError("parse", "YouTube did not return search results. Try pasting the channel URL instead.");
 }
 
-async function fetchChannel(pageUrl: string): Promise<ResolvedChannel> {
-  const html = await fetchHtml(pageUrl);
+async function fetchChannel(pageUrl: string, signal: AbortSignal | undefined): Promise<ResolvedChannel> {
+  const html = await fetchHtml(pageUrl, signal);
 
   const channelId =
     html.match(/feeds\/videos\.xml\?channel_id=([\w-]+)/)?.[1] ??
@@ -149,14 +150,19 @@ function readDescription(html: string): string | null {
   return fallback ? decodeEntities(fallback).trim() : null;
 }
 
-async function fetchHtml(url: string): Promise<string> {
+async function fetchHtml(url: string, external?: AbortSignal): Promise<string> {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(url, {
       headers: { "user-agent": USER_AGENT, "accept-language": "en-US,en;q=0.9" },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: external ? AbortSignal.any([timeout, external]) : timeout,
     });
   } catch (error) {
+    // A caller-side cancellation is not a failure: let it propagate so the caller can drop it.
+    if (external?.aborted) {
+      throw error;
+    }
     throw new UserError("network", "Could not reach YouTube. Check your connection and try again.", { cause: error });
   }
 

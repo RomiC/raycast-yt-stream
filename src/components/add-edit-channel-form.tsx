@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Form, Icon, Toast, showToast, useNavigation } from "@raycast/api";
 import { FormValidation, useForm } from "@raycast/utils";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveChannel, type ResolvedChannel } from "../lib/channel-resolver";
 import { insertChannel, renameChannel } from "../lib/channels";
 import { toUserMessage } from "../lib/errors";
@@ -11,6 +11,11 @@ const SEARCH_DEBOUNCE_MS = 800;
 interface ChannelFormValues {
   channel: string;
   name: string;
+}
+
+/** A cancelled lookup is expected while typing, so it must not surface as an error. */
+function isCancellation(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 /** Add mode without a channel, rename mode with one. */
@@ -34,9 +39,11 @@ export function AddEditChannelForm({ channel }: { channel?: Channel }) {
           await showToast({ style: Toast.Style.Success, title: `Renamed to ${renamed.name}` });
         } else {
           const input = values.channel.trim();
-          const fetched = resolved && resolvedInput === input ? resolved : await lookup(input);
+          const isCurrent = Boolean(resolved) && resolvedInput === input;
+          const fetched = isCurrent && resolved ? resolved : await lookup(input);
           const added = await insertChannel({
-            name: values.name.trim(),
+            // An edited title only applies to the channel it was typed for; otherwise the fresh one wins.
+            name: isCurrent ? values.name.trim() || fetched.name : fetched.name,
             channelId: fetched.channelId,
             thumbnail: fetched.thumbnail,
             description: fetched.description,
@@ -59,9 +66,16 @@ export function AddEditChannelForm({ channel }: { channel?: Channel }) {
     },
   });
 
+  const latestInput = useRef<string | undefined>(undefined);
+
   const lookup = useCallback(
-    async (input: string) => {
-      const fetched = await resolveChannel(input);
+    async (input: string, signal?: AbortSignal) => {
+      latestInput.current = input;
+      const fetched = await resolveChannel(input, { signal });
+      if (latestInput.current !== input) {
+        return fetched;
+      }
+
       setResolved(fetched);
       setResolvedInput(input);
       setValue("name", fetched.name);
@@ -80,14 +94,23 @@ export function AddEditChannelForm({ channel }: { channel?: Channel }) {
       return;
     }
 
+    // The controller cancels the request itself, so typing on does not leave work running.
+    const controller = new AbortController();
     const timer = setTimeout(() => {
       setIsLoading(true);
-      lookup(query)
-        .catch((failure) => setValidationError("channel", toUserMessage(failure)))
+      lookup(query, controller.signal)
+        .catch((failure) => {
+          if (latestInput.current === query && !isCancellation(failure)) {
+            setValidationError("channel", toUserMessage(failure));
+          }
+        })
         .finally(() => setIsLoading(false));
     }, SEARCH_DEBOUNCE_MS);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [channel, query, resolvedInput, lookup, setValidationError]);
 
   return (

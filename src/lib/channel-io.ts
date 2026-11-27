@@ -1,4 +1,5 @@
 import { environment } from "@raycast/api";
+import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { UserError } from "./errors";
@@ -51,7 +52,10 @@ export function parseChannels(json: string): Channel[] {
 
 export type MergeResult = { merged: Channel[]; imported: number; skipped: number };
 
-/** De-duplicates by `channelId`; existing records always win, so an import never overwrites. */
+/**
+ * De-duplicates by `channelId` and gives every accepted record a fresh local `id`, so an edited or
+ * copied file cannot collide with an existing row (delete and rename match on `id`).
+ */
 export function mergeChannels(existing: Channel[], incoming: Channel[]): MergeResult {
   const known = new Set(existing.map((channel) => channel.channelId));
   const merged = [...existing];
@@ -64,7 +68,7 @@ export function mergeChannels(existing: Channel[], incoming: Channel[]): MergeRe
       continue;
     }
     known.add(channel.channelId);
-    merged.push(channel);
+    merged.push({ ...channel, id: randomUUID() });
     imported += 1;
   }
 

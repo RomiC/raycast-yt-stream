@@ -184,6 +184,7 @@ There is no standalone add command: adding happens from Manage Channels (and fro
 3. **Description** — appears with the Title as a read-only text block: the channel's About text, pulled from `ytInitialData` (`metadata.channelMetadataRenderer.description`), falling back to the truncated `og:description` meta tag. Shown in add mode only, where it helps disambiguate a search result.
 
 - The search is **debounced**: once typing stops for 0.8 s the reference is resolved, so no blur or explicit button is needed. Changing the text invalidates the result and re-triggers the lookup; the last fetched title stays on screen until the new one arrives. A successful lookup fills the title and clears its validation error.
+- Each lookup owns an `AbortController`: the debounce cleanup aborts the in-flight request, so typing on cancels the work instead of letting it finish. `resolveChannel` accepts a signal and combines it with its own timeout; a caller-side cancellation propagates as an `AbortError` and is dropped, while a timeout still becomes a `network` error.
 - Lookups are non-blocking: `Form.isLoading` only shows a loading bar (Raycast does not disable the inputs), so the user keeps typing while the request runs.
 - On submit the resolver runs again only if the text changed since the last successful lookup, then the entry is stored with the (possibly edited) title plus the fetched `channelId`, `thumbnail` and `description`.
 - Because a name search can pick the wrong channel, the Channel field's `info` tells the user to enter the full channel URL if the result is not what they expected.
@@ -213,6 +214,7 @@ Import rules:
 - Accepts a bare array of records or a `{ "channels": [...] }` wrapper.
 - Every record is validated with the same guard the store uses. If any record is invalid the import is **atomic**: nothing is written and the error names the offending entry.
 - Merges into the existing list and de-duplicates by `channelId`. Existing channels are never modified or overwritten.
+- Every accepted record gets a **fresh local `id`**: ids are local, and reusing one from a hand-edited or copied file would make `delete`/`rename` hit two rows.
 - Malformed JSON raises a `UserError`; the stored list is left untouched.
 - The export contains channel names, IDs and avatars only — never the API token.
 
